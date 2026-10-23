@@ -49,9 +49,9 @@ func windowsTaskkillCommand(pid int) *exec.Cmd {
 // killProcessGroup returns only once the job is empty. Otherwise a surviving
 // grandchild keeps its working directory open after the tool returns.
 func killProcessGroup(p *os.Process) error {
-	runTaskkill(windowsTaskkillCommand(p.Pid), (*exec.Cmd).Run)
 	v, ok := bashJobs.Load(p.Pid)
 	if !ok {
+		runTaskkill(windowsTaskkillCommand(p.Pid), (*exec.Cmd).Run)
 		return nil
 	}
 	job := v.(windows.Handle)
@@ -63,6 +63,9 @@ func killProcessGroup(p *os.Process) error {
 			_ = windows.CloseHandle(h)
 		}
 	}()
+	// Capture handles before taskkill: a terminating member can disappear from
+	// the job list before its process handle becomes signalled.
+	runTaskkill(windowsTaskkillCommand(p.Pid), (*exec.Cmd).Run)
 	if err := windows.TerminateJobObject(job, 1); err != nil {
 		return fmt.Errorf("terminate bash job object: %w", err)
 	}
@@ -141,31 +144,22 @@ func attachProcessGroup(p *os.Process) {
 	bashJobs.Store(p.Pid, job)
 }
 
-// resumeProcess resumes every thread of the suspended process pid (its main
-// thread, the only one a CREATE_SUSPENDED start creates). It reports whether
-// it resumed one.
+var ntResumeBashProcess = windows.NewLazySystemDLL("ntdll.dll").NewProc("NtResumeProcess")
+
+// resumeProcess resumes the shell only after job assignment. Like the extension
+// subprocess host, use the process handle rather than scanning every system
+// thread. Failure still makes attachProcessGroup kill the suspended shell.
 func resumeProcess(pid int) bool {
-	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPTHREAD, 0)
+	h, err := windows.OpenProcess(windows.PROCESS_SUSPEND_RESUME, false, uint32(pid))
 	if err != nil {
 		return false
 	}
-	defer func() { _ = windows.CloseHandle(snapshot) }()
-	resumed := false
-	entry := windows.ThreadEntry32{Size: uint32(unsafe.Sizeof(windows.ThreadEntry32{}))}
-	for err = windows.Thread32First(snapshot, &entry); err == nil; err = windows.Thread32Next(snapshot, &entry) {
-		if entry.OwnerProcessID != uint32(pid) {
-			continue
-		}
-		h, openErr := windows.OpenThread(windows.THREAD_SUSPEND_RESUME, false, entry.ThreadID)
-		if openErr != nil {
-			continue
-		}
-		if _, resumeErr := windows.ResumeThread(h); resumeErr == nil {
-			resumed = true
-		}
-		_ = windows.CloseHandle(h)
+	defer func() { _ = windows.CloseHandle(h) }()
+	if err := ntResumeBashProcess.Find(); err != nil {
+		return false
 	}
-	return resumed
+	status, _, _ := ntResumeBashProcess.Call(uintptr(h))
+	return status == 0
 }
 
 // releaseProcessGroup closes the job handle. Closing it does not kill the job.
