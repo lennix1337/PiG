@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "checks": {
+    "baseline-resume": {"description":"Original Windows resume path: focused regression tests and 20 isolated resume samples with CPU/allocation profiles", "argv":["pwsh","-NoProfile","-File",".pi/windows-experiment.ps1","baseline-resume"], "timeoutMs":180000},
+    "patched-resume": {"description":"Modified Windows resume path: same focused regressions and profile workload", "argv":["pwsh","-NoProfile","-File",".pi/windows-experiment.ps1","patched-resume"], "timeoutMs":180000},
+    "safety": {"description":"Native Windows shell job, descendant, cancellation, timeout, output and command regressions", "argv":["pwsh","-NoProfile","-File",".pi/windows-experiment.ps1","safety"], "timeoutMs":180000},
+    "failure-guard": {"description":"Compile and exercise failed resume must kill suspended shell", "argv":["pwsh","-NoProfile","-File",".pi/windows-experiment.ps1","failure-guard"], "timeoutMs":30000},
+    "direct-contract": {"description":"Compare direct Git Bash against wrapper: full child environment, HOME/PATH, startup, quoting, pipes, stdout/stderr and exit codes; no external calls", "argv":["pwsh","-NoProfile","-File",".pi/windows-experiment.ps1","direct-contract"], "timeoutMs":90000},
+    "direct-benchmark": {"description":"Six rotating Pi/resume-only/direct-shell trios, identical local mock outputs, one-time setup cost reported separately", "argv":["pwsh","-NoProfile","-File",".pi/windows-experiment.ps1","direct-benchmark"], "timeoutMs":120000},
+    "direct-profile": {"description":"Real shell executor comparison with allocations, CPU and allocation profiles; fixed 20 iterations per variant", "argv":["pwsh","-NoProfile","-File",".pi/windows-experiment.ps1","direct-profile"], "timeoutMs":90000},
+    "vet": {"description":"Static Go vet of the affected tools package", "argv":["pwsh","-NoProfile","-File",".pi/windows-experiment.ps1","vet"], "timeoutMs":120000},
+    "build": {"description":"Build isolated experimental PiG binary without replacing installed agents", "argv":["pwsh","-NoProfile","-File",".pi/windows-experiment.ps1","build"], "timeoutMs":180000}
+  }
+}
